@@ -32,10 +32,43 @@
 #define GRAIN_SIZE 10
 #define CACHE_STRIDE 64 // up to 64kb of distance between compared kmer8 vectors
 
+// SIMD alignment requirements
+#define AVX512_ALIGNMENT 64
+#define AVX2_ALIGNMENT 32
+#define SSE_ALIGNMENT 16
+
+// Platform-independent aligned allocation
+static inline void* aligned_malloc(size_t size, size_t alignment) {
+#ifdef _WIN32
+  return _aligned_malloc(size, alignment);
+#else
+  void* ptr = NULL;
+  if (posix_memalign(&ptr, alignment, size) != 0) {
+    return NULL;
+  }
+  return ptr;
+#endif
+}
+
+static inline void aligned_free(void* ptr) {
+#ifdef _WIN32
+  _aligned_free(ptr);
+#else
+  free(ptr);
+#endif
+}
 
 /* -------------------------------------------
    -------- STRUCTS OBJECTS STRUCTS ----------
    ------------------------------------------- */
+
+/* DPWorkspace:
+ Reusable workspace for dynamic programming alignment matrices */
+typedef struct {
+  int16_t *d;
+  int16_t *p;
+  size_t capacity;
+} DPWorkspace;
 
 /* Comparison:
  A brief summary of the comparison between a cluster and a raw */
@@ -138,6 +171,11 @@ unsigned int b_add_bi(B *b, Bi *bi);
 Raw *bi_pop_raw(Bi *bi, unsigned int r);
 unsigned int bi_add_raw(Bi *bi, Raw *raw);
 
+// methods implemented in dp_workspace.cpp
+DPWorkspace* dp_workspace_new(size_t capacity);
+void dp_workspace_ensure_capacity(DPWorkspace *ws, size_t needed);
+void dp_workspace_free(DPWorkspace *ws);
+
 // methods implemented in cluster.cpp
 void b_compare(B *b, unsigned int i, Rcpp::NumericMatrix errMat, int match, int mismatch, int gap_pen, int homo_gap_pen, bool use_kmers, double kdist_cutoff, int band_size, bool vectorized_alignment, int SSE, bool gapless, bool greedy, bool verbose);
 void b_compare_parallel(B *b, unsigned int i, Rcpp::NumericMatrix errMat, int match, int mismatch, int gap_pen, int homo_gap_pen, bool use_kmers, double kdist_cutoff, int band_size, bool vectorized_alignment, int SSE, bool gapless, bool greedy, bool verbose);
@@ -178,8 +216,18 @@ void assign_kmer8(uint8_t *kvec8, const char *seq, int k);
 double kmer_dist(uint16_t *kv1, int len1, uint16_t *kv2, int len2, int k);
 double kmer_dist_SSEi(uint16_t *kv1, int len1, uint16_t *kv2, int len2, int k);
 double kmer_dist_SSEi_8(uint8_t *kv1, int len1, uint8_t *kv2, int len2, int k);
+double kmer_dist_AVX2(uint16_t *kv1, int len1, uint16_t *kv2, int len2, int k);
+double kmer_dist_AVX2_8(uint8_t *kv1, int len1, uint8_t *kv2, int len2, int k);
+double kmer_dist_AVX512(uint16_t *kv1, int len1, uint16_t *kv2, int len2, int k);
+double kmer_dist_AVX512_8(uint8_t *kv1, int len1, uint8_t *kv2, int len2, int k);
 double kord_dist(uint16_t *kord1, int len1, uint16_t *kord2, int len2, int k);
 double kord_dist_SSEi(uint16_t *kord1, int len1, uint16_t *kord2, int len2, int k);
+double kord_dist_AVX2(uint16_t *kord1, int len1, uint16_t *kord2, int len2, int k);
+double kord_dist_AVX512(uint16_t *kord1, int len1, uint16_t *kord2, int len2, int k);
+// Dispatcher functions - automatically select optimal SIMD implementation
+double kmer_dist_dispatch(uint16_t *kv1, int len1, uint16_t *kv2, int len2, int k);
+double kmer_dist_dispatch_8(uint8_t *kv1, int len1, uint8_t *kv2, int len2, int k);
+double kord_dist_dispatch(uint16_t *kord1, int len1, uint16_t *kord2, int len2, int k);
 ///TEST uint16_t kmer_dist2(uint16_t *kv1, int len1, uint16_t *kv2, int len2, int k);
 
 // methods implemented in pval.cpp

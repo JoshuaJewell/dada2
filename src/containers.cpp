@@ -10,8 +10,8 @@ clusters that is updated until convergence during DADA's
 inner two loops.
 */
 
-#define RAWBUF 50
-#define CLUSTBUF 50
+#define RAWBUF 256
+#define CLUSTBUF 256
 
 /********* CONSTRUCTORS AND DESTRUCTORS *********/
 
@@ -57,6 +57,7 @@ Bi *bi_new(unsigned int totraw) {
   if (bi->raw == NULL)  Rcpp::stop("Memory allocation failed.");
   bi->maxraw = RAWBUF;
   bi->totraw = totraw;
+  bi->comp.reserve(totraw);  // Pre-reserve to avoid reallocations
   bi->center = NULL;
   strcpy(bi->seq, "");
   bi->update_e = true;

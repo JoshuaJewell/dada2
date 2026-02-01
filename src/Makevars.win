@@ -1,5 +1,19 @@
 PKG_LIBS += $(shell ${R_HOME}/bin/Rscript -e "RcppParallel::RcppParallelLibs()")
 CXX_STD = CXX11
-PKG_CPPFLAGS += -msse2
-PKG_CFLAGS += -msse2
-PKG_CXXFLAGS += -msse2
+
+# Enable optimizations
+PKG_CPPFLAGS += -O3 -DNDEBUG -msse2
+PKG_CFLAGS += -O3 -msse2
+PKG_CXXFLAGS += -O3 -msse2
+
+# Enable AVX2 for all modern CPUs (Haswell 2013+, Zen 2018+)
+PKG_CPPFLAGS += -mavx2
+PKG_CFLAGS += -mavx2
+PKG_CXXFLAGS += -mavx2
+
+# Enable OpenMP for taxonomy parallelization
+PKG_CXXFLAGS += -fopenmp
+PKG_LIBS += -fopenmp
+
+# Note: AVX-512 support on Windows would require checking compiler support
+# For now, AVX2 provides substantial speedup on all modern CPUs

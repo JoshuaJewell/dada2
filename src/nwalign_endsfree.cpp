@@ -19,22 +19,22 @@ char **raw_align(Raw *raw1, Raw *raw2, int match, int mismatch, int gap_p, int h
 
   // KMER SCREEN
   if(use_kmers) {
-    if(SSE==2) { // 8-bit explicit SSE
-      kdist = kmer_dist_SSEi_8(raw1->kmer8, raw1->length, raw2->kmer8, raw2->length, KMER_SIZE);
-      if(kdist<0) { // Overflow
-        kdist = kmer_dist_SSEi(raw1->kmer, raw1->length, raw2->kmer, raw2->length, KMER_SIZE);
+    if(SSE==2) { // 8-bit version with auto-dispatch
+      kdist = kmer_dist_dispatch_8(raw1->kmer8, raw1->length, raw2->kmer8, raw2->length, KMER_SIZE);
+      if(kdist<0) { // Overflow - fall back to 16-bit
+        kdist = kmer_dist_dispatch(raw1->kmer, raw1->length, raw2->kmer, raw2->length, KMER_SIZE);
       }
-    } else if(SSE==1) { // 16-bit explicit SSE
-      kdist = kmer_dist_SSEi(raw1->kmer, raw1->length, raw2->kmer, raw2->length, KMER_SIZE);
-    } else { // implicit vectorization
+    } else if(SSE==1) { // 16-bit with auto-dispatch
+      kdist = kmer_dist_dispatch(raw1->kmer, raw1->length, raw2->kmer, raw2->length, KMER_SIZE);
+    } else { // No SIMD - use scalar version
       kdist = kmer_dist(raw1->kmer, raw1->length, raw2->kmer, raw2->length, KMER_SIZE);
     }
   }
-  
+
   // GAPLESS SCREEN (using KMERs)
   if(use_kmers && gapless) {
     if(SSE >= 1) {
-      kodist = kord_dist_SSEi(raw1->kord, raw1->length, raw2->kord, raw2->length, KMER_SIZE);
+      kodist = kord_dist_dispatch(raw1->kord, raw1->length, raw2->kord, raw2->length, KMER_SIZE);
     } else {
       kodist = kord_dist(raw1->kord, raw1->length, raw2->kord, raw2->length, KMER_SIZE);
     }
@@ -81,8 +81,8 @@ char **nwalign_endsfree(const char *s1, size_t len1, const char *s2, size_t len2
   
   unsigned int nrow = len1+1;
   unsigned int ncol = len2+1;
-  int *d = (int *) malloc(nrow * ncol * sizeof(int)); //E
-  int *p = (int *) malloc(nrow * ncol * sizeof(int)); //E
+  int *d = (int *) aligned_malloc(nrow * ncol * sizeof(int), AVX512_ALIGNMENT); //E
+  int *p = (int *) aligned_malloc(nrow * ncol * sizeof(int), AVX512_ALIGNMENT); //E
   if(d == NULL || p == NULL) Rcpp::stop("Memory allocation failed.");
   
   // Fill out left columns of d, p.
@@ -206,8 +206,8 @@ char **nwalign_endsfree(const char *s1, size_t len1, const char *s2, size_t len2
   al[1][len_al] = '\0';
   
   // Free allocated memory
-  free(d);
-  free(p);
+  aligned_free(d);
+  aligned_free(p);
   free(al0);
   free(al1);
   
@@ -256,8 +256,8 @@ char **nwalign_endsfree_homo(const char *s1, size_t len1, const char *s2, size_t
 
   unsigned int nrow = len1+1;
   unsigned int ncol = len2+1;
-  int *d = (int *) malloc(nrow * ncol * sizeof(int)); //E
-  int *p = (int *) malloc(nrow * ncol * sizeof(int)); //E
+  int *d = (int *) aligned_malloc(nrow * ncol * sizeof(int), AVX512_ALIGNMENT); //E
+  int *p = (int *) aligned_malloc(nrow * ncol * sizeof(int), AVX512_ALIGNMENT); //E
   if(d == NULL || p == NULL) Rcpp::stop("Memory allocation failed.");
   
   // Fill out left columns of d, p.
@@ -384,8 +384,8 @@ char **nwalign_endsfree_homo(const char *s1, size_t len1, const char *s2, size_t
   al[1][len_al] = '\0';
   
   // Free allocated memory
-  free(d);
-  free(p);
+  aligned_free(d);
+  aligned_free(p);
   free(homo1);
   free(homo2);
   free(al0);
@@ -408,8 +408,8 @@ char **nwalign(const char *s1, size_t len1, const char *s2, size_t len2, int sco
   
   unsigned int nrow = len1+1;
   unsigned int ncol = len2+1;
-  int *d = (int *) malloc(nrow * ncol * sizeof(int)); //E
-  int *p = (int *) malloc(nrow * ncol * sizeof(int)); //E
+  int *d = (int *) aligned_malloc(nrow * ncol * sizeof(int), AVX512_ALIGNMENT); //E
+  int *p = (int *) aligned_malloc(nrow * ncol * sizeof(int), AVX512_ALIGNMENT); //E
   if(d == NULL || p == NULL) Rcpp::stop("Memory allocation failed.");
   
   d[0] = 0;
@@ -527,8 +527,8 @@ char **nwalign(const char *s1, size_t len1, const char *s2, size_t len2, int sco
   al[1][len_al] = '\0';
   
   // Free allocated memory
-  free(d);
-  free(p);
+  aligned_free(d);
+  aligned_free(p);
   free(al0);
   free(al1);
   

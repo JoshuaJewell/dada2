@@ -36,6 +36,9 @@ void b_compare(B *b, unsigned int i, Rcpp::NumericMatrix errMat,
   } */
 
   // align all raws to this sequence and compute corresponding lambda
+  // Pre-reserve capacity to avoid vector reallocations
+  b->bi[i]->comp.reserve(b->nraw);
+
   center_reads = b->bi[i]->center->reads;
   if(verbose) { Rprintf("C%iLU:", i); }
   for(index=0, cind=0; index<b->nraw; index++) {
@@ -174,7 +177,10 @@ void b_compare_parallel(B *b, unsigned int i, Rcpp::NumericMatrix errMat,
   if(comps==NULL) Rcpp::stop("Memory allocation failed.");
   CompareParallel compareParallel(b, i, err_mat, ncol, comps, match, mismatch, gap_pen, homo_gap_pen, use_kmers, kdist_cutoff, band_size, vectorized_alignment, SSE, gapless, greedy);
   RcppParallel::parallelFor(0, b->nraw, compareParallel, GRAIN_SIZE);
-  
+
+  // Pre-reserve capacity to avoid vector reallocations
+  b->bi[i]->comp.reserve(b->nraw);
+
   // Selectively store
   for(index=0, cind=0; index<b->nraw; index++) {
     b->nalign++; ///t

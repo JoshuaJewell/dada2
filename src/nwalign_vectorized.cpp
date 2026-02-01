@@ -92,14 +92,14 @@ char **nwalign_vectorized2(const char *s1, size_t len1, const char *s2, size_t l
   }
   if(band < 0) { band = len2; }
   
-  // Allocate the DP matrices
+  // Allocate the DP matrices with AVX-512 alignment
   start_col = 1 + (1+(band<len1 ? band : len1))/2;
   //  ncol = 3 + (len1+len2+1)/2; // 3 = left boundary + center + right boundary !!!
   ncol = 2 + start_col + ((len2-len1+band)<len2 ? (len2-len1+band) : len2)/2;
   nrow = len1 + len2 + 1;
-  int16_t *d = (int16_t *) malloc(ncol * nrow * sizeof(int16_t));
-  int16_t *p = (int16_t *) malloc(ncol * nrow * sizeof(int16_t));
-  int16_t *diag_buf = (int16_t *) malloc(ncol * sizeof(int16_t));
+  int16_t *d = (int16_t *) aligned_malloc(ncol * nrow * sizeof(int16_t), AVX512_ALIGNMENT);
+  int16_t *p = (int16_t *) aligned_malloc(ncol * nrow * sizeof(int16_t), AVX512_ALIGNMENT);
+  int16_t *diag_buf = (int16_t *) aligned_malloc(ncol * sizeof(int16_t), AVX512_ALIGNMENT);
   if (d == NULL || p == NULL || diag_buf == NULL)  Rcpp::stop("Memory allocation failed.");
   
   // For banding issues later on
@@ -285,9 +285,9 @@ char **nwalign_vectorized2(const char *s1, size_t len1, const char *s2, size_t l
   al1[len_al] = '\0';
   
   // Free DP objects
-  free(d);
-  free(p);
-  free(diag_buf);
+  aligned_free(d);
+  aligned_free(p);
+  aligned_free(diag_buf);
   
   // Return to input ordering
   if(swap) {
