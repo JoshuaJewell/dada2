@@ -4,7 +4,7 @@
 
 This README documents performance optimisations implemented in DADA2, covering both CPU and GPU acceleration for [Benjamin Callahan's dada2 repository](https://github.com/benjjneb/dada2).
 
----
+
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -14,7 +14,7 @@ This README documents performance optimisations implemented in DADA2, covering b
 5. [Installation & Usage](#installation--usage)
 6. [Troubleshooting](#troubleshooting)
 
----
+
 
 ## Overview
 
@@ -28,7 +28,7 @@ This README documents performance optimisations implemented in DADA2, covering b
 | **Taxonomy (CPU)** | OpenMP parallelisation |
 | **Taxonomy (GPU)** | CUDA acceleration |
 
----
+
 
 ## CPU Optimisations
 
@@ -76,7 +76,7 @@ This README documents performance optimisations implemented in DADA2, covering b
 
 **Function**: `get_best_genus_parallel()`
 
----
+
 
 ## GPU Optimisations
 
@@ -122,7 +122,7 @@ Memory-efficient batched processing for GPUs with limited VRAM (tested for 6GB V
 - Per-sequence reduction to find maximum score
 - Uses shared memory for efficiency
 
----
+
 
 ## Installation & Usage
 
@@ -217,7 +217,7 @@ Sys.setenv(OMP_NUM_THREADS = "8")
 options(RcppParallel.thread.num = 8)
 ```
 
----
+
 
 ## Troubleshooting
 
@@ -256,7 +256,7 @@ taxa <- assignTaxonomy(seqtab[1:10,], refFasta, verbose=TRUE)
    nvidia-smi  # Shows GPU memory usage
    ```
 
----
+
 
 ## Technical Details
 
@@ -292,7 +292,7 @@ taxa <- assignTaxonomy(seqtab[1:10,], refFasta, verbose=TRUE)
 - NVCC flags: `-O3 --compiler-options -fPIC`
 - GPU architectures: SM 5.0, 6.0, 7.0, 7.5 (configurable)
 
----
+
 
 ## Credits
 
@@ -302,19 +302,19 @@ Anthropic's Claude for just about anything and everything that generative AI was
 
 Based on original DADA2 algorithm by Callahan, B.J., McMurdie, P.J., Rosen, M.J., Han, A.W., Johnson, A.J.A. & Holmes, S.P.
 
----
+
 
 ## References
 
 Callahan, B.J., McMurdie, P.J., Rosen, M.J., Han, A.W., Johnson, A.J.A. & Holmes, S.P., 2016. DADA2: High‑resolution sample inference from Illumina amplicon data. Nature Methods, 13, pp.581‑583. DOI: https://doi.org/10.1038/nmeth.3869.
 
----
+
 
 ## License
 
 These optimisations maintain the same license as DADA2 package.
 
----
+
 
 Last updated: 2026-02-01
 Version: DADA2 1.36.0-optimised
