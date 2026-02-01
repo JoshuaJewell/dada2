@@ -1,4 +1,4 @@
-# DADA2 Performance Optimisation Guide
+# DADA2 with Performance Optimisations
 
 ## Complete Optimisation Summary
 
@@ -27,7 +27,6 @@ This README documents performance optimisations implemented in DADA2, covering b
 | **Denoising (dada)** | Aligned memory |
 | **Denoising (dada)** | Vector pre-allocation |
 | **Taxonomy (CPU)** | OpenMP parallelisation |
-| **Taxonomy (CPU)** | Fixed thread conflicts |
 | **Taxonomy (GPU)** | CUDA acceleration |
 
 ---
