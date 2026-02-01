@@ -12,8 +12,7 @@ This README documents performance optimisations implemented in DADA2, covering b
 3. [GPU/CUDA Optimisations](#gpu-optimisations)
 4. [Memory Optimisations](#memory-optimisations)
 5. [Installation & Usage](#installation--usage)
-6. [Performance Benchmarks](#performance-benchmarks)
-7. [Troubleshooting](#troubleshooting)
+6. [Troubleshooting](#troubleshooting)
 
 ---
 
