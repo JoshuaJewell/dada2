@@ -22,7 +22,7 @@ This README documents performance optimisations implemented in DADA2, covering b
 ### Optimisations Implemented
 
 | Component | Optimisation |
-|-----------|--------------|---------|
+|-----------|--------------|
 | **Denoising (dada)** | AVX2/AVX-512 SIMD |
 | **Denoising (dada)** | Aligned memory |
 | **Denoising (dada)** | Vector pre-allocation |
