@@ -104,6 +104,13 @@ __global__ void compute_bootstrap_scores_kernel(
     int *bootarray = &d_bootarrays[(seq_idx * nboot + boot_idx) * max_boot_arraylen];
     float *lgk_v = &d_lgk_probability[genus_idx * n_kmers];
 
+    // Debug: print first kmer for first sequence, first 3 bootstraps, first genus
+    if (seq_idx == 0 && boot_idx < 3 && genus_idx == 0) {
+        printf("KERNEL: seq=0, boot=%d, genus=0: first_kmer=%d, arraylen=%d, offset=%d\n",
+               boot_idx, bootarray[0], arraylen,
+               (seq_idx * nboot + boot_idx) * max_boot_arraylen);
+    }
+
     float logp = 0.0f;
 
     #pragma unroll 4
@@ -119,6 +126,7 @@ __global__ void compute_bootstrap_scores_kernel(
 __global__ void find_best_bootstrap_genus_kernel(
     float *d_scores,          // [nseq][NBOOT][ngenus_batch]
     int *d_boot_genus,        // [nseq][NBOOT] - output bootstrap genus indices
+    float *d_boot_logp,       // [nseq][NBOOT] - output bootstrap log probabilities
     int nseq,
     int nboot,
     int ngenus_batch,
@@ -141,6 +149,7 @@ __global__ void find_best_bootstrap_genus_kernel(
     }
 
     d_boot_genus[seq_idx * nboot + boot_idx] = max_g;
+    d_boot_logp[seq_idx * nboot + boot_idx] = max_logp;
 }
 
 // Host function: Check if CUDA is available and get device info
@@ -366,21 +375,40 @@ extern "C" bool cuda_assign_taxonomy_bootstrap(
     CUDA_CHECK(cudaMemcpy(d_bootarrays, h_bootarrays, boot_data_mem, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_boot_arraylen, h_boot_arraylen, boot_len_mem, cudaMemcpyHostToDevice));
 
+    // Debug: verify data copied correctly by reading it back
+    if (nseq > 0) {
+        int *verify = (int*)malloc(3 * max_boot_arraylen * sizeof(int));
+        CUDA_CHECK(cudaMemcpy(verify, d_bootarrays, 3 * max_boot_arraylen * sizeof(int), cudaMemcpyDeviceToHost));
+        printf("DEBUG: First kmer of bootstrap 0,1,2 after GPU copy: %d, %d, %d\n",
+               verify[0], verify[max_boot_arraylen], verify[2 * max_boot_arraylen]);
+        bool arrays_differ = (verify[0] != verify[max_boot_arraylen]) ||
+                            (verify[max_boot_arraylen] != verify[2 * max_boot_arraylen]);
+        printf("DEBUG: Bootstrap arrays differ on GPU: %s\n", arrays_differ ? "YES" : "NO");
+        free(verify);
+    }
+
     // Allocate device memory for batch processing
     float *d_lgk_batch;
     float *d_scores;
     int *d_boot_genus;
     int *d_batch_genus;
+    float *d_batch_logp;
 
     CUDA_CHECK(cudaMalloc(&d_lgk_batch, (size_t)ngenus_per_batch * n_kmers * sizeof(float)));
     CUDA_CHECK(cudaMalloc(&d_scores, (size_t)nseq * nboot * ngenus_per_batch * sizeof(float)));
     CUDA_CHECK(cudaMalloc(&d_boot_genus, nseq * nboot * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&d_batch_genus, nseq * nboot * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_batch_logp, nseq * nboot * sizeof(float)));
 
-    // Initialize results
+    // Allocate and initialize result tracking arrays
     int *h_batch_genus = (int*)malloc(nseq * nboot * sizeof(int));
+    float *h_batch_logp = (float*)malloc(nseq * nboot * sizeof(float));
+    float *h_best_logp = (float*)malloc(nseq * nboot * sizeof(float));
+
+    // Initialize best results with very negative values
     for(int i = 0; i < nseq * nboot; i++) {
         h_boot_genus[i] = -1;
+        h_best_logp[i] = -1e30f;
     }
 
     // Process each batch
@@ -412,7 +440,7 @@ extern "C" bool cuda_assign_taxonomy_bootstrap(
         dim3 threads_best(256);
 
         find_best_bootstrap_genus_kernel<<<blocks_best, threads_best>>>(
-            d_scores, d_batch_genus,
+            d_scores, d_batch_genus, d_batch_logp,
             nseq, nboot, ngenus_this_batch, genus_start
         );
         CUDA_CHECK(cudaGetLastError());
@@ -420,9 +448,31 @@ extern "C" bool cuda_assign_taxonomy_bootstrap(
         // Copy batch results back
         CUDA_CHECK(cudaMemcpy(h_batch_genus, d_batch_genus,
                              nseq * nboot * sizeof(int), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_batch_logp, d_batch_logp,
+                             nseq * nboot * sizeof(float), cudaMemcpyDeviceToHost));
 
-        // Store results (no need to combine across batches - each bootstrap iteration is independent)
-        memcpy(h_boot_genus, h_batch_genus, nseq * nboot * sizeof(int));
+        // Update global best (compare across batches)
+        int updates = 0;
+        for(int i = 0; i < nseq * nboot; i++) {
+            if (h_batch_logp[i] > h_best_logp[i]) {
+                h_best_logp[i] = h_batch_logp[i];
+                h_boot_genus[i] = h_batch_genus[i];
+                updates++;
+            }
+        }
+
+        // Debug: show first sequence results for each batch
+        if (nseq > 0 && batch < 4) {
+            printf("DEBUG Batch %d: First sequence, first 3 bootstrap iterations:\n", batch);
+            printf("  Boot 0: genus=%d, logp=%.2f (current best: g=%d, logp=%.2f)\n",
+                   h_batch_genus[0], h_batch_logp[0], h_boot_genus[0], h_best_logp[0]);
+            printf("  Boot 1: genus=%d, logp=%.2f (current best: g=%d, logp=%.2f)\n",
+                   h_batch_genus[1], h_batch_logp[1], h_boot_genus[1], h_best_logp[1]);
+            printf("  Boot 2: genus=%d, logp=%.2f (current best: g=%d, logp=%.2f)\n",
+                   h_batch_genus[2], h_batch_logp[2], h_boot_genus[2], h_best_logp[2]);
+            printf("  Genus range: %d to %d, Updated: %d/%d pairs\n",
+                   genus_start, genus_start + ngenus_this_batch - 1, updates, nseq * nboot);
+        }
 
         if ((batch + 1) % 5 == 0 || batch == nbatches - 1) {
             printf("  Bootstrap batch %d/%d (%.1f%% complete)\n",
@@ -432,12 +482,15 @@ extern "C" bool cuda_assign_taxonomy_bootstrap(
 
     // Cleanup
     free(h_batch_genus);
+    free(h_batch_logp);
+    free(h_best_logp);
     cudaFree(d_bootarrays);
     cudaFree(d_boot_arraylen);
     cudaFree(d_lgk_batch);
     cudaFree(d_scores);
     cudaFree(d_boot_genus);
     cudaFree(d_batch_genus);
+    cudaFree(d_batch_logp);
 
     return true;
 }

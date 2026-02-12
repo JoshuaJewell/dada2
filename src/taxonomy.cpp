@@ -483,6 +483,21 @@ bool try_cuda_assign_bootstrap(
             memcpy(&h_bootarrays[(j * NBOOT + boot) * max_boot_arraylen],
                    bootarray, (arraylen/8) * sizeof(int));
         }
+
+        // Debug: check if bootstrap arrays vary for first sequence
+        if (verbose && j == 0 && nseq > 0) {
+            int first_kmer_boot0 = h_bootarrays[0];
+            int first_kmer_boot1 = h_bootarrays[max_boot_arraylen];
+            int first_kmer_boot2 = h_bootarrays[2 * max_boot_arraylen];
+            bool all_same = (first_kmer_boot0 == first_kmer_boot1) && (first_kmer_boot1 == first_kmer_boot2);
+
+            Rprintf("Bootstrap array debug: First sequence arraylen=%d, boot_arraylen=%d\n",
+                   arraylen, h_boot_arraylen[0]);
+            Rprintf("  First kmer in boot 0,1,2: %d, %d, %d (all same: %s)\n",
+                   first_kmer_boot0, first_kmer_boot1, first_kmer_boot2, all_same ? "YES" : "NO");
+            Rprintf("  First 5 unifs: %.4f, %.4f, %.4f, %.4f, %.4f\n",
+                   unifs[0], unifs[1], unifs[2], unifs[3], unifs[4]);
+        }
     }
 
     if (verbose) {
@@ -510,6 +525,23 @@ bool try_cuda_assign_bootstrap(
                 C_rboot_tax[i * NBOOT + boot] = h_boot_genus[i * NBOOT + boot] + 1; // Convert to 1-indexed
             }
         }
+
+        // Debug: check bootstrap variation
+        if (verbose && nseq > 0) {
+            int first_genus = C_rboot_tax[0];
+            int different_count = 0;
+            for(unsigned int boot = 1; boot < NBOOT; boot++) {
+                if (C_rboot_tax[boot] != first_genus) {
+                    different_count++;
+                }
+            }
+            Rprintf("GPU bootstrap debug: First sequence - %d/%d iterations found different genera\n",
+                   different_count, NBOOT-1);
+            Rprintf("  First 10 bootstrap genera: %d %d %d %d %d %d %d %d %d %d\n",
+                   C_rboot_tax[0], C_rboot_tax[1], C_rboot_tax[2], C_rboot_tax[3], C_rboot_tax[4],
+                   C_rboot_tax[5], C_rboot_tax[6], C_rboot_tax[7], C_rboot_tax[8], C_rboot_tax[9]);
+        }
+
         if (verbose) Rprintf("GPU bootstrap evaluation complete!\n");
     } else {
         if (verbose) Rprintf("GPU bootstrap failed, falling back to CPU.\n");
@@ -713,19 +745,32 @@ Rcpp::List C_assign_taxonomy2(std::vector<std::string> seqs, std::vector<std::st
       for(j=0;j<nlevel;j++) {
         C_rboot[i*nlevel+j] = 0;
       }
+      int main_g = C_rval[i] - 1; // Get main genus assignment (1-indexed in C_rval)
       for(unsigned int boot=0;boot<NBOOT;boot++) {
         int boot_g = C_rboot_tax[i*NBOOT + boot] - 1; // Convert from 1-indexed
         if(boot_g >= 0 && boot_g < (int)ngenus) {
+          // Check if bootstrap genus matches main genus at each taxonomic level
           for(j=0;j<nlevel;j++) {
-            if(C_genusmat[boot_g*nlevel+j] > 0) {
+            if(C_genusmat[boot_g*nlevel+j] == C_genusmat[main_g*nlevel+j]) {
               C_rboot[i*nlevel+j]++;
+            } else {
+              break; // Stop checking further levels when mismatch occurs
             }
           }
         }
       }
     }
+
+    if (verbose && nseq > 0) {
+      Rprintf("Bootstrap values computed. First sequence example:\n");
+      Rprintf("  Main genus = %d, Bootstrap values: ", C_rval[0]);
+      for(j=0; j<nlevel && j<5; j++) {
+        Rprintf("%d ", C_rboot[j]);
+      }
+      Rprintf("\n");
+    }
   }
-  
+
   // Copy from C-versions back to R objects
   for(i=0;i<nseq;i++) {
     rval(i) = C_rval[i];
