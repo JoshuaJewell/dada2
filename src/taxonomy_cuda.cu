@@ -104,13 +104,6 @@ __global__ void compute_bootstrap_scores_kernel(
     int *bootarray = &d_bootarrays[(seq_idx * nboot + boot_idx) * max_boot_arraylen];
     float *lgk_v = &d_lgk_probability[genus_idx * n_kmers];
 
-    // Debug: print first kmer for first sequence, first 3 bootstraps, first genus
-    if (seq_idx == 0 && boot_idx < 3 && genus_idx == 0) {
-        printf("KERNEL: seq=0, boot=%d, genus=0: first_kmer=%d, arraylen=%d, offset=%d\n",
-               boot_idx, bootarray[0], arraylen,
-               (seq_idx * nboot + boot_idx) * max_boot_arraylen);
-    }
-
     float logp = 0.0f;
 
     #pragma unroll 4
@@ -375,18 +368,6 @@ extern "C" bool cuda_assign_taxonomy_bootstrap(
     CUDA_CHECK(cudaMemcpy(d_bootarrays, h_bootarrays, boot_data_mem, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_boot_arraylen, h_boot_arraylen, boot_len_mem, cudaMemcpyHostToDevice));
 
-    // Debug: verify data copied correctly by reading it back
-    if (nseq > 0) {
-        int *verify = (int*)malloc(3 * max_boot_arraylen * sizeof(int));
-        CUDA_CHECK(cudaMemcpy(verify, d_bootarrays, 3 * max_boot_arraylen * sizeof(int), cudaMemcpyDeviceToHost));
-        printf("DEBUG: First kmer of bootstrap 0,1,2 after GPU copy: %d, %d, %d\n",
-               verify[0], verify[max_boot_arraylen], verify[2 * max_boot_arraylen]);
-        bool arrays_differ = (verify[0] != verify[max_boot_arraylen]) ||
-                            (verify[max_boot_arraylen] != verify[2 * max_boot_arraylen]);
-        printf("DEBUG: Bootstrap arrays differ on GPU: %s\n", arrays_differ ? "YES" : "NO");
-        free(verify);
-    }
-
     // Allocate device memory for batch processing
     float *d_lgk_batch;
     float *d_scores;
@@ -459,19 +440,6 @@ extern "C" bool cuda_assign_taxonomy_bootstrap(
                 h_boot_genus[i] = h_batch_genus[i];
                 updates++;
             }
-        }
-
-        // Debug: show first sequence results for each batch
-        if (nseq > 0 && batch < 4) {
-            printf("DEBUG Batch %d: First sequence, first 3 bootstrap iterations:\n", batch);
-            printf("  Boot 0: genus=%d, logp=%.2f (current best: g=%d, logp=%.2f)\n",
-                   h_batch_genus[0], h_batch_logp[0], h_boot_genus[0], h_best_logp[0]);
-            printf("  Boot 1: genus=%d, logp=%.2f (current best: g=%d, logp=%.2f)\n",
-                   h_batch_genus[1], h_batch_logp[1], h_boot_genus[1], h_best_logp[1]);
-            printf("  Boot 2: genus=%d, logp=%.2f (current best: g=%d, logp=%.2f)\n",
-                   h_batch_genus[2], h_batch_logp[2], h_boot_genus[2], h_best_logp[2]);
-            printf("  Genus range: %d to %d, Updated: %d/%d pairs\n",
-                   genus_start, genus_start + ngenus_this_batch - 1, updates, nseq * nboot);
         }
 
         if ((batch + 1) % 5 == 0 || batch == nbatches - 1) {

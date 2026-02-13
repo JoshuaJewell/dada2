@@ -760,15 +760,6 @@ Rcpp::List C_assign_taxonomy2(std::vector<std::string> seqs, std::vector<std::st
         }
       }
     }
-
-    if (verbose && nseq > 0) {
-      Rprintf("Bootstrap values computed. First sequence example:\n");
-      Rprintf("  Main genus = %d, Bootstrap values: ", C_rval[0]);
-      for(j=0; j<nlevel && j<5; j++) {
-        Rprintf("%d ", C_rboot[j]);
-      }
-      Rprintf("\n");
-    }
   }
 
   // Copy from C-versions back to R objects
